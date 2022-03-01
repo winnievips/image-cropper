@@ -1,0 +1,6 @@
+{
+	"appId": "io.ionic.starter",
+	"appName": "image-cropper",
+	"webDir": "www",
+	"bundledWebRuntime": false
+}
