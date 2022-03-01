@@ -1,0 +1,48 @@
+<div [style.background]="imageVisible && backgroundColor"
+     #wrapper
+>
+<div style="object-fit: cover; height: 650px">
+    <swiper [config]="config" #newSwiper>
+        <ng-template swiperSlide>
+            <div class="swiper-zoom-container">
+                <img
+                    #sourceImage
+                    class="ngx-ic-source-image"
+                    *ngIf="safeImgDataUrl"
+                    [src]="safeImgDataUrl"
+                    [style.visibility]="imageVisible ? 'visible' : 'visible'"
+                    [style.transform]="safeTransformStyle"
+                    (load)="imageLoadedInView()"
+                />
+            </div>
+        </ng-template>
+    </swiper>
+</div> 
+
+    <div
+        class="ngx-ic-overlay"
+        [style.width.px]="maxSize.width"
+        [style.height.px]="maxSize.height"
+        [style.margin-left]="alignImage === 'center' ? marginLeft : null"
+    ></div>
+    <!-- <div class="ngx-ic-cropper"
+         [class.ngx-ic-round]="roundCropper"
+         [style.top.px]="cropper.y1"
+         [style.left.px]="cropper.x1"
+         [style.width.px]="cropper.x2 - cropper.x1"
+         [style.height.px]="cropper.y2 - cropper.y1"
+         [style.margin-left]="alignImage === 'center' ? marginLeft : null"
+         [style.visibility]="imageVisible ? 'visible' : 'visible'"
+         tabindex="0"
+    ></div> -->
+    <div class="ngx-ic-cropper"
+    [class.ngx-ic-round]="roundCropper"
+    [style.top.px]="cropper.y1"
+    [style.left.px]="cropper.x1"
+    [style.width.px]="cropper.x2 - cropper.x1"
+    [style.height.px]="cropper.y2 - cropper.y1"
+    [style.margin-left]="alignImage === 'center' ? marginLeft : null"
+    [style.visibility]="imageVisible ? 'visible' : 'visible'"
+    tabindex="0"
+></div>
+</div>

@@ -1,20 +1,48 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
     <ion-title>
-      Blank
+      Blank 1
     </ion-title>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content>
+  <image-cropper
+    [imageBase64]="myImage"
+    [roundCropper]="true"
+    [imageQuality]="100" 
+    [maintainAspectRatio]="true"
+    [aspectRatio]="1 / 1"
+  ></image-cropper>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
+  <!-- <p>below canvas can convert to base64 to api</p> -->
+  <canvas id="finalCanvas" width="365" height="365"
+    style="
+        border: 5px solid black;
+        top: 0;
+        left: 0;
+        position: absolute;
+        z-index: -5;">
+  </canvas>
+
+  <!-- <p>transform style to div before convert to canvas</p> -->
+  <div #imgInDiv id="imgInDiv" class="imgInDiv" 
+    style="
+        overflow: hidden;
+        width: 365px;
+        height: 365px;
+        top: 0;
+        left: 0;
+        position: absolute;
+        z-index: -5;
+    ">
   </div>
+
 </ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+      <ion-button expand="block" (click)="goToResult()">SAVE</ion-button>
+  </ion-toolbar>
+</ion-footer>
+

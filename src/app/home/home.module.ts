@@ -5,6 +5,10 @@ import { FormsModule } from '@angular/forms';
 import { HomePage } from './home.page';
 
 import { HomePageRoutingModule } from './home-routing.module';
+import { ImageCropperModule } from '../component/image-cropper.module';
+import 'hammerjs/hammer';
+import 'hammerjs';
+import { SwiperModule } from 'swiper/angular';
 
 
 @NgModule({
@@ -12,7 +16,9 @@ import { HomePageRoutingModule } from './home-routing.module';
     CommonModule,
     FormsModule,
     IonicModule,
-    HomePageRoutingModule
+    HomePageRoutingModule,
+    ImageCropperModule,
+    SwiperModule
   ],
   declarations: [HomePage]
 })
