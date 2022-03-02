@@ -1,0 +1,21 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title (click)="backToHome()">from-plugin 1</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div style="display: flex; height: 100%; align-items: center;">
+    <swiper [config]="config" #newSwiper>
+      <ng-template swiperSlide>
+          <div class="swiper-zoom-container">
+              <img
+                  #sourceImage
+                  class="ngx-ic-source-image"
+                  [src]="myImage"
+              />
+          </div>
+      </ng-template>
+    </swiper> 
+  </div>
+</ion-content>

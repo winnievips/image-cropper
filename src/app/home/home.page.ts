@@ -2,7 +2,8 @@ import { AfterContentChecked, Component, ElementRef, OnInit, ViewChild } from '@
 import { ModalController } from '@ionic/angular';
 import { ResultPage } from '../pages/result/result.page';
 import SwiperCore, { SwiperOptions, Zoom } from 'swiper';
-import { CropperPosition } from '../interfaces';
+import { CropperPosition, LoadedImage } from '../interfaces';
+import { Router } from '@angular/router';
 SwiperCore.use([Zoom])
 
 @Component({
@@ -37,7 +38,8 @@ export class HomePage implements OnInit, AfterContentChecked {
   }
 
   constructor(
-    private modalCtrl: ModalController
+    private modalCtrl: ModalController,
+    private router: Router
   ) {}
 
   ngAfterContentChecked(): void {
@@ -94,14 +96,19 @@ export class HomePage implements OnInit, AfterContentChecked {
     newImg.src = this.myImage
     newImg.id = "newImg"
 
+    console.log("imageWidth", imageWidth)
+
     // the height of image top to the circle (ypaddingtop)
     let cropperElement = document.getElementsByClassName('ngx-ic-cropper')[0] as HTMLElement
     let ypaddingtop = Number(cropperElement.style.top.split("px")[0])// (imageHeight - imageWidth)/2
-    console.log("ypaddingtop", ypaddingtop)
+    let xpaddingleft = Number(cropperElement.style.left.split("px")[0])
     let newYpx = ypx ? (y - ypaddingtop).toString() + 'px': (-1 * ypaddingtop).toString() + 'px'
+    let newXpx = xpx ? (x + xpaddingleft).toString() + 'px': (1 * xpaddingleft).toString() + 'px'
     divwrapper.append(newImg)
     newImg.style.objectFit = 'cover'
 
+    console.log("imageWidth", imageWidth, cropperElement.style.width)
+    console.log("x",x, xpaddingleft, newXpx)
 
     //set the transform style to the img in div
     newImg.style.transform = `translate(${x}px, ${newYpx}) scale(${scale})`
@@ -129,6 +136,20 @@ export class HomePage implements OnInit, AfterContentChecked {
       cssClass: 'my-custom-class',
     });
     return await modal.present();
+  }
+
+  imageLoaded(image: LoadedImage) {
+    // show cropper
+  }
+  cropperReady() {
+      // cropper ready
+  }
+  loadImageFailed() {
+      // show message
+  }
+
+  goToFromPlugin() {
+    this.router.navigate(['from-plugin'])
   }
 
 }

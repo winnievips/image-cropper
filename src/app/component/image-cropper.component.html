@@ -1,7 +1,6 @@
 <div [style.background]="imageVisible && backgroundColor"
      #wrapper
 >
-<div>
     <swiper [config]="config" #newSwiper>
         <ng-template swiperSlide>
             <div class="swiper-zoom-container">
@@ -10,25 +9,41 @@
                     class="ngx-ic-source-image"
                     *ngIf="safeImgDataUrl"
                     [src]="safeImgDataUrl"
-                    [style.visibility]="imageVisible ? 'visible' : 'visible'"
+                    [style.visibility]="imageVisible ? 'visible' : 'hidden'"
                     [style.transform]="safeTransformStyle"
+                    (load)="imageLoadedInView()"
                 />
             </div>
         </ng-template>
-    </swiper>
-</div> 
+    </swiper> 
 
-    <div
-        class="ngx-ic-overlay"
-        [style.width.px]="maxSize.width"
-        [style.height.px]="maxSize.height"
-        [style.margin-left]="alignImage === 'center' ? marginLeft : null"
-    ></div>
-    <div class="ngx-ic-cropper ngx-ic-round"
+    <div class="ngx-ic-cropper"
+        *ngIf="imageVisible"
+        [class.ngx-ic-round]="roundCropper"
         [style.top.px]="cropper.y1"
         [style.left.px]="cropper.x1"
         [style.width.px]="cropper.x2 - cropper.x1"
         [style.height.px]="cropper.y2 - cropper.y1"
         [style.margin-left]="alignImage === 'center' ? marginLeft : null"
+        [style.visibility]="imageVisible ? 'visible' : 'hidden'"
+        (keydown)="keyboardAccess($event)"
+        tabindex="0"
+    >
+    </div>
+
+    <!-- <div class="second-layer"></div>
+
+    <div #imgInDiv class="div-layer"
+        [style.width.px]="squareSize"
+        [style.height.px]="squareSize"
     ></div>
+
+    <div class="fourth-layer"></div>
+
+    <canvas id="finalCanvas"
+        [width]="squareSize"
+        [height]="squareSize"
+        class="canvas-layer">
+    </canvas> -->
+
 </div>

@@ -15,6 +15,10 @@ const routes: Routes = [
     path: 'result',
     loadChildren: () => import('./pages/result/result.module').then( m => m.ResultPageModule)
   },
+  {
+    path: 'from-plugin',
+    loadChildren: () => import('./pages/from-plugin/from-plugin.module').then( m => m.FromPluginPageModule)
+  },
 ];
 
 @NgModule({

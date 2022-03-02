@@ -1,6 +1,4 @@
 import {
-  AfterContentChecked,
-  AfterContentInit,
   AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
@@ -37,7 +35,10 @@ SwiperCore.use([Zoom])
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
+  private Hammer: HammerStatic = (window as any)?.['Hammer'] || null;
   private settings = new CropperSettings();
+  private setImageMaxSizeRetries = 0;
+  private moveStart?: MoveStart;
   private loadedImage?: LoadedImage;
 
   safeImgDataUrl?: SafeUrl | string;
@@ -95,7 +96,7 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
   @HostBinding('style.text-align')
   @Input() alignImage: 'left' | 'center' = this.settings.alignImage;
   @HostBinding('class.disabled')
-  @Input() disabled = true;
+  @Input() disabled = false;
 
   @Output() imageCropped = new EventEmitter<ImageCroppedEvent>();
   @Output() startCropImage = new EventEmitter<void>();
@@ -104,6 +105,8 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
   @Output() loadImageFailed = new EventEmitter<void>();
 
   constructor(
+    private cropService: CropService,
+    private cropperPositionService: CropperPositionService,
     private loadImageService: LoadImageService,
     private sanitizer: DomSanitizer,
     private cd: ChangeDetectorRef
@@ -123,14 +126,24 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
       this.loadImageService
         .transformLoadedImage(this.loadedImage, this.settings)
         .then((res) => this.setLoadedImage(res))
+        .catch((err) => this.loadImageError(err));
     }
     if (changes['cropper'] || changes['maintainAspectRatio'] || changes['aspectRatio']) {
       this.setMaxSize();
+      this.setCropperScaledMinSize();
+      this.setCropperScaledMaxSize();
+      if (this.maintainAspectRatio && (changes['maintainAspectRatio'] || changes['aspectRatio'])) {
+        this.resetCropperPosition();
+      } else if (changes['cropper']) {
+        this.checkCropperPosition(false);
+        this.doAutoCrop();
+      }
       this.cd.markForCheck();
     }
     if (changes['transform']) {
       this.transform = this.transform || {};
       this.setCssTransform();
+      this.doAutoCrop();
     }
   }
 
@@ -153,8 +166,17 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
     if (changes['imageChangedEvent'] || changes['imageURL'] || changes['imageBase64'] || changes['imageFile']) {
       this.reset();
     }
+    if (changes['imageChangedEvent'] && this.isValidImageChangedEvent()) {
+      this.loadImageFile(this.imageChangedEvent.target.files[0]);
+    }
+    if (changes['imageURL'] && this.imageURL) {
+      this.loadImageFromURL(this.imageURL);
+    }
     if (changes['imageBase64'] && this.imageBase64) {
       this.loadBase64Image(this.imageBase64);
+    }
+    if (changes['imageFile'] && this.imageFile) {
+      this.loadImageFile(this.imageFile);
     }
   }
 
@@ -172,9 +194,8 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-    // this.settings.stepSize = this.initialStepSize;
-    // this.activatePinchGesture();
-    this.setMaxSize()
+    this.settings.stepSize = this.initialStepSize;
+    this.activatePinchGesture();
   }
 
   private reset(): void {
@@ -183,6 +204,17 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
     this.safeImgDataUrl = 'data:image/png;base64,iVBORw0KGg'
       + 'oAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAU'
       + 'AAarVyFEAAAAASUVORK5CYII=';
+    this.moveStart = {
+      active: false,
+      type: null,
+      position: null,
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      clientX: 0,
+      clientY: 0
+    };
     this.maxSize = {
       width: 0,
       height: 0
@@ -193,10 +225,25 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
     this.cropper.y2 = 10000;
   }
 
+  private loadImageFile(file: File): void {
+    this.loadImageService
+      .loadImageFile(file, this.settings)
+      .then((res) => this.setLoadedImage(res))
+      .catch((err) => this.loadImageError(err));
+  }
+
   private loadBase64Image(imageBase64: string): void {
     this.loadImageService
       .loadBase64Image(imageBase64, this.settings)
       .then((res) => this.setLoadedImage(res))
+      .catch((err) => this.loadImageError(err));
+  }
+
+  private loadImageFromURL(url: string): void {
+    this.loadImageService
+      .loadImageFromURL(url, this.settings)
+      .then((res) => this.setLoadedImage(res))
+      .catch((err) => this.loadImageError(err));
   }
 
   private setLoadedImage(loadedImage: LoadedImage): void {
@@ -205,12 +252,284 @@ export class ImageCropperComponent implements OnChanges, OnInit, AfterViewInit {
     this.cd.markForCheck();
   }
 
+  private loadImageError(error: any): void {
+    console.error(error);
+    this.loadImageFailed.emit();
+  }
+
+  imageLoadedInView(): void {
+    if (this.loadedImage != null) {
+      this.imageLoaded.emit(this.loadedImage);
+      this.setImageMaxSizeRetries = 0;
+      setTimeout(() => this.checkImageMaxSizeRecursively());
+    }
+  }
+
+  private checkImageMaxSizeRecursively(): void {
+    if (this.setImageMaxSizeRetries > 40) {
+      this.loadImageFailed.emit();
+    } else if (this.sourceImageLoaded()) {
+      this.setMaxSize();
+      this.setCropperScaledMinSize();
+      this.setCropperScaledMaxSize();
+      this.resetCropperPosition();
+      this.cropperReady.emit({ ...this.maxSize });
+      this.cd.markForCheck();
+    } else {
+      this.setImageMaxSizeRetries++;
+      setTimeout(() => this.checkImageMaxSizeRecursively(), 50);
+    }
+  }
+
+  private sourceImageLoaded(): boolean {
+    return this.sourceImage?.nativeElement?.offsetWidth > 0;
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    if (!this.loadedImage) {
+      return;
+    }
+    this.resizeCropperPosition();
+    this.setMaxSize();
+    this.setCropperScaledMinSize();
+    this.setCropperScaledMaxSize();
+  }
+
+  private activatePinchGesture() {
+    if (this.Hammer) {
+      const hammer = new this.Hammer(this.wrapper.nativeElement);
+      hammer.get('pinch').set({ enable: true });
+      hammer.on('pinchmove', this.onPinch.bind(this));
+      hammer.on('pinchend', this.pinchStop.bind(this));
+      hammer.on('pinchstart', this.startPinch.bind(this));
+    } else if (isDevMode()) {
+      console.warn('[NgxImageCropper] Could not find HammerJS - Pinch Gesture won\'t work');
+    }
+  }
+
+  private resizeCropperPosition(): void {
+    const sourceImageElement = this.sourceImage.nativeElement;
+    if (this.maxSize.width !== sourceImageElement.offsetWidth || this.maxSize.height !== sourceImageElement.offsetHeight) {
+      this.cropper.x1 = this.cropper.x1 * sourceImageElement.offsetWidth / this.maxSize.width;
+      this.cropper.x2 = this.cropper.x2 * sourceImageElement.offsetWidth / this.maxSize.width;
+      this.cropper.y1 = this.cropper.y1 * sourceImageElement.offsetHeight / this.maxSize.height;
+      this.cropper.y2 = this.cropper.y2 * sourceImageElement.offsetHeight / this.maxSize.height;
+    }
+  }
+
+  resetCropperPosition(): void {
+    this.cropperPositionService.resetCropperPosition(this.sourceImage, this.cropper, this.settings);
+    this.doAutoCrop();
+    this.imageVisible = true;
+  }
+
+  keyboardAccess(event: KeyboardEvent) {
+    this.changeKeyboardStepSize(event);
+    this.keyboardMoveCropper(event);
+  }
+
+  private changeKeyboardStepSize(event: KeyboardEvent): void {
+    const key = +event.key;
+    if (key >= 1 && key <= 9) {
+      this.settings.stepSize = key;
+    }
+  }
+
+  private keyboardMoveCropper(event: any) {
+    const keyboardWhiteList: string[] = ['ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft'];
+    if (!(keyboardWhiteList.includes(event.key))) {
+      return;
+    }
+    const moveType = event.shiftKey ? MoveTypes.Resize : MoveTypes.Move;
+    const position = event.altKey ? getInvertedPositionForKey(event.key) : getPositionForKey(event.key);
+    const moveEvent = getEventForKey(event.key, this.settings.stepSize);
+    event.preventDefault();
+    event.stopPropagation();
+    this.startMove({ clientX: 0, clientY: 0 }, moveType, position);
+    this.moveImg(moveEvent);
+    this.moveStop();
+  }
+
+  startMove(event: any, moveType: MoveTypes, position: string | null = null): void {
+    if (this.moveStart?.active && this.moveStart?.type === MoveTypes.Pinch) {
+      return;
+    }
+    if (event.preventDefault) {
+      event.preventDefault();
+    }
+    // this.moveStart = {
+    //   active: true,
+    //   type: moveType,
+    //   position,
+    //   clientX: this.cropperPositionService.getClientX(event),
+    //   clientY: this.cropperPositionService.getClientY(event),
+    //   ...this.cropper
+    // };
+  }
+
+  startPinch(event: any) {
+    if (!this.safeImgDataUrl) {
+      return;
+    }
+    if (event.preventDefault) {
+      event.preventDefault();
+    }
+    // this.moveStart = {
+    //   active: true,
+    //   type: MoveTypes.Pinch,
+    //   position: 'center',
+    //   clientX: this.cropper.x1 + (this.cropper.x2 - this.cropper.x1) / 2,
+    //   clientY: this.cropper.y1 + (this.cropper.y2 - this.cropper.y1) / 2,
+    //   ...this.cropper
+    // };
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  @HostListener('document:touchmove', ['$event'])
+  moveImg(event: any): void {
+    if (this.moveStart!.active) {
+      if (event.stopPropagation) {
+        event.stopPropagation();
+      }
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+      if (this.moveStart!.type === MoveTypes.Move) {
+        this.cropperPositionService.move(event, this.moveStart!, this.cropper);
+        this.checkCropperPosition(true);
+      } else if (this.moveStart!.type === MoveTypes.Resize) {
+        if (!this.cropperStaticWidth && !this.cropperStaticHeight) {
+          this.cropperPositionService.resize(event, this.moveStart!, this.cropper, this.maxSize, this.settings);
+        }
+        this.checkCropperPosition(false);
+      }
+      this.cd.detectChanges();
+    }
+  }
+
+  onPinch(event: any) {
+    if (this.moveStart!.active) {
+      if (event.stopPropagation) {
+        event.stopPropagation();
+      }
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+      if (this.moveStart!.type === MoveTypes.Pinch) {
+        this.cropperPositionService.resize(event, this.moveStart!, this.cropper, this.maxSize, this.settings);
+        this.checkCropperPosition(false);
+      }
+      this.cd.detectChanges();
+    }
+  }
+
   private setMaxSize(): void {
     if (this.sourceImage) {
       const sourceImageElement = this.sourceImage.nativeElement;
       this.maxSize.width = sourceImageElement.offsetWidth;
-      this.maxSize.height = document.getElementsByTagName("ion-content")[0].clientHeight;
+      this.maxSize.height = sourceImageElement.offsetHeight;
       this.marginLeft = this.sanitizer.bypassSecurityTrustStyle('calc(50% - ' + this.maxSize.width / 2 + 'px)');
     }
+  }
+
+  private setCropperScaledMinSize(): void {
+    if (this.loadedImage?.transformed?.image) {
+      this.setCropperScaledMinWidth();
+      this.setCropperScaledMinHeight();
+    } else {
+      this.settings.cropperScaledMinWidth = 20;
+      this.settings.cropperScaledMinHeight = 20;
+    }
+  }
+
+  private setCropperScaledMinWidth(): void {
+    this.settings.cropperScaledMinWidth = this.cropperMinWidth > 0
+      ? Math.max(20, this.cropperMinWidth / this.loadedImage!.transformed.image.width * this.maxSize.width)
+      : 20;
+  }
+
+  private setCropperScaledMinHeight(): void {
+    if (this.maintainAspectRatio) {
+      this.settings.cropperScaledMinHeight = Math.max(20, this.settings.cropperScaledMinWidth / this.aspectRatio);
+    } else if (this.cropperMinHeight > 0) {
+      this.settings.cropperScaledMinHeight = Math.max(
+        20,
+        this.cropperMinHeight / this.loadedImage!.transformed.image.height * this.maxSize.height
+      );
+    } else {
+      this.settings.cropperScaledMinHeight = 20;
+    }
+  }
+
+  private setCropperScaledMaxSize(): void {
+    if (this.loadedImage?.transformed?.image) {
+      const ratio = this.loadedImage.transformed.size.width / this.maxSize.width;
+      this.settings.cropperScaledMaxWidth = this.cropperMaxWidth > 20 ? this.cropperMaxWidth / ratio : this.maxSize.width;
+      this.settings.cropperScaledMaxHeight = this.cropperMaxHeight > 20 ? this.cropperMaxHeight / ratio : this.maxSize.height;
+      if (this.maintainAspectRatio) {
+        if (this.settings.cropperScaledMaxWidth > this.settings.cropperScaledMaxHeight * this.aspectRatio) {
+          this.settings.cropperScaledMaxWidth = this.settings.cropperScaledMaxHeight * this.aspectRatio;
+        } else if (this.settings.cropperScaledMaxWidth < this.settings.cropperScaledMaxHeight * this.aspectRatio) {
+          this.settings.cropperScaledMaxHeight = this.settings.cropperScaledMaxWidth / this.aspectRatio;
+        }
+      }
+    } else {
+      this.settings.cropperScaledMaxWidth = this.maxSize.width;
+      this.settings.cropperScaledMaxHeight = this.maxSize.height;
+    }
+  }
+
+  private checkCropperPosition(maintainSize = false): void {
+    if (this.cropper.x1 < 0) {
+      this.cropper.x2 -= maintainSize ? this.cropper.x1 : 0;
+      this.cropper.x1 = 0;
+    }
+    if (this.cropper.y1 < 0) {
+      this.cropper.y2 -= maintainSize ? this.cropper.y1 : 0;
+      this.cropper.y1 = 0;
+    }
+    if (this.cropper.x2 > this.maxSize.width) {
+      this.cropper.x1 -= maintainSize ? (this.cropper.x2 - this.maxSize.width) : 0;
+      this.cropper.x2 = this.maxSize.width;
+    }
+    if (this.cropper.y2 > this.maxSize.height) {
+      this.cropper.y1 -= maintainSize ? (this.cropper.y2 - this.maxSize.height) : 0;
+      this.cropper.y2 = this.maxSize.height;
+    }
+  }
+
+  @HostListener('document:mouseup')
+  @HostListener('document:touchend')
+  moveStop(): void {
+    if (this.moveStart!.active) {
+      this.moveStart!.active = false;
+      this.doAutoCrop();
+    }
+  }
+
+  pinchStop(): void {
+    if (this.moveStart!.active) {
+      this.moveStart!.active = false;
+      this.doAutoCrop();
+    }
+  }
+
+  private doAutoCrop(): void {
+    if (this.autoCrop) {
+      this.crop();
+    }
+  }
+
+  crop(): ImageCroppedEvent | null {
+    if (this.loadedImage?.transformed?.image != null) {
+      this.startCropImage.emit();
+      const output = this.cropService.crop(this.sourceImage, this.loadedImage, this.cropper, this.settings);
+      if (output != null) {
+        this.imageCropped.emit(output);
+      }
+      return output;
+    }
+    return null;
   }
 }

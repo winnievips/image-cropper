@@ -1,17 +1,26 @@
 <ion-header>
   <ion-toolbar>
-    <ion-title>
-      Blank
+    <ion-title (click)="goToFromPlugin()">
+      Blank 1
     </ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content id="cropperIonContent">
-  <image-cropper
-    style="height:100%"
-    [imageBase64]="myImage"
-    [cropper]="cropper"
-  ></image-cropper>
+  <div  style=" display: flex; height: 100%; align-items: center;">
+    <image-cropper
+      [imageBase64]="myImage"
+      [maintainAspectRatio]="true"
+      [aspectRatio]="1 / 1"
+      [roundCropper]="true"
+      [disabled]="true"
+      [hideResizeSquares]="true"
+      (imageCropped)="imageCropped($event)"
+      (imageLoaded)="imageLoaded()"
+      (cropperReady)="cropperReady()"
+      (loadImageFailed)="loadImageFailed()"
+    ></image-cropper>
+  </div>
 
   <div class="second-layer"></div>
 

@@ -4,7 +4,7 @@
     width: 100%;
     max-width: 100%;
     max-height: 100%;
-    overflow: hidden;
+    overflow: visible;
     text-align: center;
 
     > div {
@@ -12,9 +12,7 @@
         position: relative;
 
         img.ngx-ic-source-image {
-            // height: 100vh;
-            // width: 100vw;
-            // object-fit: cover;
+            z-index: 999;
             max-width: 100%;
             max-height: 100%;
             transform-origin: center;
@@ -28,6 +26,7 @@
         outline: var(--cropper-overlay-color, white) solid 100vw;
         top: 0;
         left: 0;
+        height: 100vh
     }
 
     .ngx-ic-cropper {
@@ -55,7 +54,6 @@
             left: 0;
             right: 0;
             pointer-events: none;
-            border: dashed 1px;
             opacity: .75;
             color: inherit;
             z-index: 1;
